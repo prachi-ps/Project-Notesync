@@ -1,0 +1,152 @@
+import { useRoom, useSelf } from "@liveblocks/react/suspense";
+import React, { useEffect, useRef, useState } from "react";
+import * as Y from "yjs";
+import { LiveblocksYjsProvider } from "@liveblocks/yjs";
+import { Button } from "./ui/button";
+import { MoonIcon, SunIcon } from "lucide-react";
+import { BlockNoteView } from "@blocknote/shadcn";
+import { BlockNoteEditor } from "@blocknote/core";
+import { useCreateBlockNote } from "@blocknote/react";
+import "@blocknote/core/fonts/inter.css";
+import "@blocknote/shadcn/style.css";
+import stringToColor from "@/lib/stringToColor";
+import { db } from "@/firebase"; // ✅ ensure this points to your Firebase config
+import { doc as firestoreDoc, setDoc, getDoc } from "firebase/firestore";
+
+type EditorProps = {
+  doc: Y.Doc;
+  provider: any;
+  darkMode: boolean;
+  roomId: string;
+  userId: string;
+};
+
+// Debounced save: waits until user stops typing for 2 seconds
+function useAutoSaveEditor(roomId: string, userId: string, editor: BlockNoteEditor | null) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!editor || !roomId || !userId) return;
+
+    const saveContent = async () => {
+      const blocks = editor.document;
+      await setDoc(
+        firestoreDoc(db, "users", userId, "rooms", roomId),
+        { content: blocks, updatedAt: new Date() },
+        { merge: true }
+      );
+      console.log("✅ Content saved to Firestore");
+    };
+
+    const handleChange = () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(saveContent, 2000); // waits 2s after last change
+    };
+
+    // listen to editor changes
+    const unsubscribe = editor.onChange(handleChange);
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      unsubscribe?.();
+    };
+  }, [editor, roomId, userId]);
+}
+
+// Load previously saved content from Firestore
+function useLoadEditorContent(roomId: string, userId: string, editor: BlockNoteEditor | null) {
+  useEffect(() => {
+    const loadContent = async () => {
+      if (!editor || !roomId || !userId) return;
+
+      const snap = await getDoc(firestoreDoc(db, "users", userId, "rooms", roomId));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.content) {
+          editor.replaceBlocks(editor.document, data.content);
+        }
+      }
+    };
+    loadContent();
+  }, [editor, roomId, userId]);
+}
+
+function BlockNote({ doc, provider, darkMode, roomId, userId }: EditorProps) {
+  const userInfo = useSelf((me) => me.info);
+
+  const editor = useCreateBlockNote({
+    collaboration: {
+      provider,
+      fragment: doc.getXmlFragment("document-store"),
+      user: {
+        name: userInfo?.name,
+        color: stringToColor(userInfo?.email),
+      },
+    },
+  }) as unknown as BlockNoteEditor;
+
+  // Auto-load + debounce save
+  useLoadEditorContent(roomId, userId, editor);
+  useAutoSaveEditor(roomId, userId, editor);
+
+  return (
+    <div className="relative max-6-xl mx-auto div className='flex items-center gap-2 max-w-4xl justify-end mb-10'">
+      <BlockNoteView
+        className="min-h-screen"
+        editor={editor as any}
+        theme={darkMode ? "dark" : "light"}
+      />
+    </div>
+  );
+}
+
+function Editor() {
+  const room = useRoom();
+  const self = useSelf();
+  const [doc, setDoc] = useState<Y.Doc>();
+  const [provider, setProvider] = useState<LiveblocksYjsProvider>();
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const yDoc = new Y.Doc();
+    const yProvider = new LiveblocksYjsProvider(room, yDoc);
+    setDoc(yDoc);
+    setProvider(yProvider);
+
+    return () => {
+      yDoc?.destroy();
+      yProvider?.destroy();
+    };
+  }, [room]);
+
+  if (!doc || !provider) return null;
+
+  const roomId = room.id;
+  const userId = self?.info?.email || "unknown_user";
+
+  const style = `hover:text-white ${
+    darkMode
+      ? "text-gray-300 bg-gray-700 hover:bg-gray-100 hover:text-gray-700"
+      : "text-gray-700 bg-gray-200 hover:bg-gray-300 hover:text-gray-700"
+  }`;
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="flex items-center gap-2 max-w-4xl justify-end mb-10">
+        <Button className={style} onClick={() => setDarkMode(!darkMode)}>
+          {darkMode ? <SunIcon /> : <MoonIcon />}
+        </Button>
+      </div>
+
+      <BlockNote
+        doc={doc}
+        provider={provider}
+        darkMode={darkMode}
+        roomId={roomId}
+        userId={userId}
+      />
+    </div>
+  );
+}
+
+export default Editor;
