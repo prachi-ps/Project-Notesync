@@ -17,10 +17,20 @@ import ManageUsers from './ManageUsers';
 import Avatars from './Avatars';
 
 function Document({id}: {id: string}) {
-    const [data, loading, error] = useDocumentData(doc(db, "documents", id))
+    const [data, loading, error] = useDocumentData(
+      id ? doc(db, "documents", id) : null,
+      {
+        snapshotListenOptions: { includeMetadataChanges: false },
+      }
+    );
     const[input, setInput] = useState("");
     const [isUpdating, startTransition] = useTransition();
     const isOwner = useOwner();
+
+    // Handle errors gracefully
+    if (error) {
+      console.error('Error loading document:', error);
+    }
 
     useEffect(() => {
         if(data){

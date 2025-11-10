@@ -12,11 +12,22 @@ function SidebarOption({href, id}:{
     id: string;
 }) {
 
-  const [data, loading, error] = useDocumentData (doc(db, "documents", id));
+  const [data, loading, error] = useDocumentData(
+    id ? doc(db, "documents", id) : null,
+    {
+      snapshotListenOptions: { includeMetadataChanges: false },
+    }
+  );
   const pathname = usePathname();
   const isActive = href.includes(pathname) && pathname !== "/";
 
-  if(!data) return null;
+  // Handle errors gracefully - don't show option if there's an error
+  if (error) {
+    console.error(`Error loading document ${id}:`, error);
+    return null;
+  }
+
+  if(!data || loading) return null;
 
   return (
     <Link href={href} className={`relative border p-2 rounded-md ${

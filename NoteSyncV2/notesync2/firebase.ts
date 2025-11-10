@@ -1,6 +1,6 @@
 
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";;
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDMdoT7Sdx2yn2xONq6pWkrXcF7Ad9NyT8",
@@ -12,8 +12,12 @@ const firebaseConfig = {
   measurementId: "G-ZGV56N4H2G"
 };
 
-// Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();    
+// Initialize Firebase - ensure singleton instance
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+// Initialize Firestore - getFirestore handles singleton automatically
+// By default, Firestore uses memory cache in browser (no IndexedDB persistence)
+// This prevents state conflicts that can cause internal assertion errors
 const db = getFirestore(app);
 
 export { db };

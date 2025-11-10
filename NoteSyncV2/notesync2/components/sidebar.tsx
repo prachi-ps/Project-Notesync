@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { MenuIcon } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
-import { collectionGroup, DocumentData, query, where } from 'firebase/firestore';
+import { collection, DocumentData } from 'firebase/firestore';
 import { db } from '@/firebase';
 import SidebarOption from './SidebarOption';
 
@@ -35,33 +35,48 @@ function Sidebar() {
         editor: [],
   })
 
+  // Get user email - Clerk stores it in emailAddresses[0].emailAddress
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+  
+  // Use direct collection query instead of collectionGroup to avoid index requirement
+  // Path: users/{userEmail}/rooms - this is a direct collection, no index needed!
+  // Note: Direct collection queries don't require indexes for basic queries
   const [data, loading, error] = useCollection(
-    user && 
-      query(
-        collectionGroup(db, 'rooms'),
-         where('userId', '==', user.emailAddresses[0].toString())
-    )
+    userEmail
+      ? collection(db, 'users', userEmail, 'rooms')
+      : null,
+    {
+      snapshotListenOptions: { includeMetadataChanges: false },
+    }
   );
+
+  // Log error but don't crash the app
+  if (error) {
+    console.error('Error loading rooms:', error);
+  }
 
   useEffect(() => {
     if (!data) return;
-
 
     const grouped = data.docs.reduce<{
       owner: RoomDocument[];
       editor: RoomDocument[];
     }>(
-      (acc, curr) => {                              // acc = accumulator? curr = current
+      (acc, curr) => {
         const roomData = curr.data() as RoomDocument;
+        
+        // The document ID is the roomId (set when creating the room)
+        // Use roomId from data if available, otherwise use document ID
+        const roomId = roomData.roomId || curr.id;
 
-        if(roomData.role == "owner") {
+        if(roomData.role === "owner") {
           acc.owner.push({
-            id: curr.id,
+            id: roomId, // Use roomId for navigation
             ...roomData,
           });
-        }else{
+        } else {
           acc.editor.push({
-            id: curr.id,
+            id: roomId, // Use roomId for navigation
             ...roomData,
           });
         }
@@ -71,7 +86,34 @@ function Sidebar() {
         owner: [],
         editor: [],
       }
-    )
+    );
+
+    // Sort by createdAt in descending order (most recent first)
+    // Handle both Firestore Timestamp and Date objects
+    const getTimestamp = (date: any): number => {
+      if (!date) return 0;
+      // Firestore Timestamp
+      if (date.toDate && typeof date.toDate === 'function') {
+        return date.toDate().getTime();
+      }
+      // JavaScript Date
+      if (date instanceof Date) {
+        return date.getTime();
+      }
+      // Number (already a timestamp)
+      if (typeof date === 'number') {
+        return date;
+      }
+      return 0;
+    };
+
+    grouped.owner.sort((a, b) => {
+      return getTimestamp(b.createdAt) - getTimestamp(a.createdAt);
+    });
+    
+    grouped.editor.sort((a, b) => {
+      return getTimestamp(b.createdAt) - getTimestamp(a.createdAt);
+    });
 
     setGroupedData(grouped);
   }, [data])

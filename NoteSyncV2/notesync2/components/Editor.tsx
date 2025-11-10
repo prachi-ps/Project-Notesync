@@ -29,13 +29,20 @@ function useAutoSaveEditor(roomId: string, userId: string, editor: BlockNoteEdit
     if (!editor || !roomId || !userId) return;
 
     const saveContent = async () => {
-      const blocks = editor.document;
-      await setDoc(
-        firestoreDoc(db, "users", userId, "rooms", roomId),
-        { content: blocks, updatedAt: new Date() },
-        { merge: true }
-      );
-      console.log("✅ Content saved to Firestore");
+      if (!roomId || !userId) return;
+      
+      try {
+        const blocks = editor.document;
+        await setDoc(
+          firestoreDoc(db, "users", userId, "rooms", roomId),
+          { content: blocks, updatedAt: new Date() },
+          { merge: true }
+        );
+        console.log("✅ Content saved to Firestore");
+      } catch (error) {
+        console.error('Error saving content to Firestore:', error);
+        // Don't throw - allow user to continue editing
+      }
     };
 
     const handleChange = () => {
@@ -59,12 +66,17 @@ function useLoadEditorContent(roomId: string, userId: string, editor: BlockNoteE
     const loadContent = async () => {
       if (!editor || !roomId || !userId) return;
 
-      const snap = await getDoc(firestoreDoc(db, "users", userId, "rooms", roomId));
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.content) {
-          editor.replaceBlocks(editor.document, data.content);
+      try {
+        const snap = await getDoc(firestoreDoc(db, "users", userId, "rooms", roomId));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.content) {
+            editor.replaceBlocks(editor.document, data.content);
+          }
         }
+      } catch (error) {
+        console.error('Error loading content from Firestore:', error);
+        // Don't throw - allow editor to work with empty content
       }
     };
     loadContent();

@@ -53,35 +53,54 @@ export async function createNewDocument() {
   const { sessionClaims, userId } = await auth(); //  await here
 
   if (!userId) {
-    // Not signed in → redirect to Clerk’s sign-in route
+    // Not signed in → redirect to Clerk's sign-in route
     redirect("/sign-in");
   } 
 
-  const docCollectionRef = adminDb.collection("documents");
-  const docRef = await docCollectionRef.add({
-    title: "New Doc",
-    userId, 
-  });
-
-  //return docRef;
-
+  try {
     const userEmail = typeof sessionClaims?.email === 'string' ? sessionClaims.email : '';
 
-    //once the document is created i need to create for that user who was logged in, hey're basically using the document ID that we just created, I need to add them to the room ao that they are a part of that room
-    await adminDb
-    .collection('users')
-    .doc(userEmail)
-    //.doc(userId) //  use userId instead of email because line above this was giving error
-    .collection('rooms')
-    .doc(docRef.id)
-    .set({
-        userId: sessionClaims?.email!,
-        role: "owner",
-        createdAt: new Date(),
-        roomId: docRef.id
+    if (!userEmail) {
+      throw new Error('User email is required');
+    }
+
+    // Create document and room in a batch to ensure atomicity
+    const batch = adminDb.batch();
+
+    // Create the document
+    const docRef = adminDb.collection("documents").doc();
+    batch.set(docRef, {
+      title: "New Doc",
+      userId, 
+      createdAt: new Date(),
     });
 
+    // Create the room reference for the user
+    const roomRef = adminDb
+      .collection('users')
+      .doc(userEmail)
+      .collection('rooms')
+      .doc(docRef.id);
+    
+    batch.set(roomRef, {
+      userId: userEmail,
+      role: "owner",
+      createdAt: new Date(),
+      roomId: docRef.id
+    });
+
+    // Commit both operations atomically
+    await batch.commit();
+
+    // Wait a brief moment to ensure Firestore has propagated the changes
+    // This helps prevent race conditions when the client immediately queries
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     return {docId: docRef.id};
+  } catch (error) {
+    console.error('Error creating new document:', error);
+    throw error;
+  }
 }
 
 export async function deleteDocument(roomId:string) {
@@ -172,5 +191,33 @@ export async function removeUserFromDocument(roomId:string, email: string) {
   } catch(error){
     console.error(error);
     return {success: false};
+  }
+}
+
+export async function getUsersInRoom(roomId: string) {
+  const { userId } = await auth();
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
+  try {
+    // Use collectionGroup query on server-side (admin SDK doesn't require indexes)
+    const querySnapshot = await adminDb
+      .collectionGroup("rooms")
+      .where("roomId", "==", roomId)
+      .get();
+
+    const users = querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      userId: doc.data().userId,
+      role: doc.data().role,
+      createdAt: doc.data().createdAt,
+      roomId: doc.data().roomId,
+    }));
+
+    return { success: true, users };
+  } catch (error) {
+    console.error("Error getting users in room:", error);
+    return { success: false, users: [] };
   }
 }
