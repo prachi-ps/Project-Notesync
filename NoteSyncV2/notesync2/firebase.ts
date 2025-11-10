@@ -1,16 +1,19 @@
-import { getApps, getApp, initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";;
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCOijAamisVVILHfsSRzNb7M60oCl5ncO0",
-  authDomain: "notesync-28fb0.firebaseapp.com",
-  projectId: "notesync-28fb0",
-  storageBucket: "notesync-28fb0.firebasestorage.app",
-  messagingSenderId: "796592717661",
-  appId: "1:796592717661:web:c46dad5fbb292c9dcbb2b4"
+  apiKey: "AIzaSyDMdoT7Sdx2yn2xONq6pWkrXcF7Ad9NyT8",
+  authDomain: "profiling-system-86336.firebaseapp.com",
+  projectId: "profiling-system-86336",
+  storageBucket: "profiling-system-86336.firebasestorage.app",
+  messagingSenderId: "718607026344",
+  appId: "1:718607026344:web:b4bb44792814a90634da9d",
+  measurementId: "G-ZGV56N4H2G"
 };
 
-const app = getApps.length === 0 ? initializeApp(firebaseConfig) : getApp();    
+// Initialize Firebase
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();    
 const db = getFirestore(app);
 
 export { db };
