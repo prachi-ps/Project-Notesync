@@ -89,7 +89,15 @@ export async function createNewDocument() {
       roomId: docRef.id
     });
 
-    // Commit both operations atomically
+    // Also add to members subcollection for easy tracking during deletion
+    const memberRef = docRef.collection('members').doc(userEmail);
+    batch.set(memberRef, {
+      email: userEmail,
+      role: "owner",
+      addedAt: new Date(),
+    });
+
+    // Commit all operations atomically
     await batch.commit();
 
     // Wait a brief moment to ensure Firestore has propagated the changes
@@ -104,9 +112,6 @@ export async function createNewDocument() {
 }
 
 export async function deleteDocument(roomId:string) {
-  //auth().protect();   //error, not working
-  //const session = await auth();
-  //session.protect(); 
   const { userId } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");
@@ -115,29 +120,69 @@ export async function deleteDocument(roomId:string) {
   console.log("deleteDocument", roomId);
 
   try{
-    //delete the document reference itself
-    await adminDb.collection("documents").doc(roomId).delete();
+    // Get the document first to check if it exists and get member list if stored
+    const docRef = adminDb.collection("documents").doc(roomId);
+    const docSnapshot = await docRef.get();
+    
+    let userEmails: string[] = [];
+    
+    // Try to get members from a members subcollection (if we've implemented it)
+    // Otherwise, we'll need to handle orphaned references
+    try {
+      const membersSnapshot = await docRef.collection("members").get();
+      userEmails = membersSnapshot.docs.map(doc => doc.id);
+    } catch (error) {
+      // Members subcollection might not exist yet - that's okay
+      console.log("No members subcollection found, will clean up what we can");
+    }
 
-    const query = await adminDb
-    .collectionGroup("rooms")
-    .where("roomId", "==", roomId)
-    .get();
+    // Delete the document reference itself
+    await docRef.delete();
 
-    const batch = adminDb.batch();
+    // Delete room references for known users using direct paths
+    // This avoids collectionGroup queries which require indexes
+    if (userEmails.length > 0) {
+      const batch = adminDb.batch();
+      
+      userEmails.forEach((email) => {
+        const roomRef = adminDb
+          .collection("users")
+          .doc(email)
+          .collection("rooms")
+          .doc(roomId);
+        batch.delete(roomRef);
+      });
 
-    //delete the room reference in user's collection for every user in the room
-    query.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
+      // Firestore batches have a limit of 500 operations
+      if (userEmails.length <= 500) {
+        await batch.commit();
+      } else {
+        // If more than 500 users, commit in chunks
+        const chunks = [];
+        for (let i = 0; i < userEmails.length; i += 500) {
+          chunks.push(userEmails.slice(i, i + 500));
+        }
+        for (const chunk of chunks) {
+          const chunkBatch = adminDb.batch();
+          chunk.forEach((email) => {
+            const roomRef = adminDb
+              .collection("users")
+              .doc(email)
+              .collection("rooms")
+              .doc(roomId);
+            chunkBatch.delete(roomRef);
+          });
+          await chunkBatch.commit();
+        }
+      }
+    }
 
-    await batch.commit();
-
-    //delete liveblocks room
+    // Delete liveblocks room
     await liveblocks.deleteRoom(roomId);
     return {success: true}; 
 
   } catch (error) {
-    console.error(error);
+    console.error("Error deleting document:", error);
     return { success: false };
   }
 }
@@ -152,21 +197,36 @@ export async function inviteUserToDocument(roomId:string, email:string) {
   console.log("inviteUserToDocument", roomId, email);
 
   try{
-    await adminDb
-    .collection("users")
-    .doc(email)
-    .collection("rooms")
-    .doc(roomId)
-    .set({
+    const batch = adminDb.batch();
+
+    // Add to user's rooms collection
+    const userRoomRef = adminDb
+      .collection("users")
+      .doc(email)
+      .collection("rooms")
+      .doc(roomId);
+    
+    batch.set(userRoomRef, {
       userId: email, 
       role: "editor",
       createdAt: new Date(),
       roomId,
-    })
+    });
+
+    // Also add to document's members subcollection for tracking
+    const docRef = adminDb.collection("documents").doc(roomId);
+    const memberRef = docRef.collection('members').doc(email);
+    batch.set(memberRef, {
+      email: email,
+      role: "editor",
+      addedAt: new Date(),
+    });
+
+    await batch.commit();
     return {success: true};
   }catch(error){
     console.error(error);
-    return {success: true};
+    return {success: false};
   }
 }
 
@@ -181,12 +241,22 @@ export async function removeUserFromDocument(roomId:string, email: string) {
   console.log("RemoveUserFromDocument", roomId, email);
 
   try{
-    await adminDb
-    .collection("users")
-    .doc(email)
-    .collection("rooms")
-    .doc(roomId)
-    .delete();
+    const batch = adminDb.batch();
+
+    // Remove from user's rooms collection
+    const userRoomRef = adminDb
+      .collection("users")
+      .doc(email)
+      .collection("rooms")
+      .doc(roomId);
+    batch.delete(userRoomRef);
+
+    // Also remove from document's members subcollection
+    const docRef = adminDb.collection("documents").doc(roomId);
+    const memberRef = docRef.collection('members').doc(email);
+    batch.delete(memberRef);
+
+    await batch.commit();
     return {success: true};
   } catch(error){
     console.error(error);
@@ -201,19 +271,20 @@ export async function getUsersInRoom(roomId: string) {
   }
 
   try {
-    // Use collectionGroup query on server-side (admin SDK doesn't require indexes)
-    const querySnapshot = await adminDb
-      .collectionGroup("rooms")
-      .where("roomId", "==", roomId)
-      .get();
+    // Use members subcollection instead of collectionGroup to avoid index requirement
+    const docRef = adminDb.collection("documents").doc(roomId);
+    const membersSnapshot = await docRef.collection("members").get();
 
-    const users = querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      userId: doc.data().userId,
-      role: doc.data().role,
-      createdAt: doc.data().createdAt,
-      roomId: doc.data().roomId,
-    }));
+    const users = membersSnapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        userId: data.email || doc.id, // Use email from data or doc ID as fallback
+        role: data.role || "editor",
+        createdAt: data.addedAt || data.createdAt,
+        roomId: roomId,
+      };
+    });
 
     return { success: true, users };
   } catch (error) {
