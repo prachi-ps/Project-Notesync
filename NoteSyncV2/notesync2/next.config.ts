@@ -18,6 +18,16 @@ const nextConfig: NextConfig = {
     buildActivity: false, // hides build spinner
   },
 
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'api.dicebear.com',
+        pathname: '/**',
+      },
+    ],
+  },
+
   webpackDevMiddleware: (config: any) => {
     // Disable the red React error overlay in dev mode
     if (config.client) {
