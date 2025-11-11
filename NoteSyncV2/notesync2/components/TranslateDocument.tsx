@@ -82,7 +82,6 @@ function TranslateDocument({ doc }: { doc: Y.Doc }) {
 				}
 
 				setSummary(translatedText);
-				setIsOpen(false);
 				setLanguage('');
 			} catch (err) {
 				const message = err instanceof Error ? err.message : 'Translation failed. Please try again.';
@@ -100,7 +99,7 @@ function TranslateDocument({ doc }: { doc: Y.Doc }) {
     <Button asChild variant="outline">
         <DialogTrigger>
             <LanguagesIcon/>
-            Translate
+            Translated summary
             </DialogTrigger>
     </Button>
     <DialogContent>
@@ -110,6 +109,7 @@ function TranslateDocument({ doc }: { doc: Y.Doc }) {
             Select the language you want to translate the document to.
         </DialogDescription>
         </DialogHeader>
+
         {
             summary && (
                 <div className="flex flex-col items-start max-h-96 overflow-y-scroll gap-2 p-5 bg-gray-100 rounded">

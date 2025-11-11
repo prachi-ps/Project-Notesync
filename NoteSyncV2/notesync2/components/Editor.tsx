@@ -13,6 +13,7 @@ import stringToColor from "@/lib/stringToColor";
 import { db } from "@/firebase"; // ✅ ensure this points to your Firebase config
 import { doc as firestoreDoc, setDoc, getDoc } from "firebase/firestore";
 import TranslateDocument from "./TranslateDocument";
+import ChatToDocument from "./ChatToDocument";
 
 type EditorProps = {
   doc: Y.Doc;
@@ -172,6 +173,7 @@ function Editor() {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center gap-2 max-w-4xl justify-end mb-10">
+        <ChatToDocument doc = {doc} />
           <TranslateDocument doc = {doc} />
         <Button className={style} onClick={() => setDarkMode(!darkMode)}>
           {/* Toggle dark mode */}
