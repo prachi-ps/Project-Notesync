@@ -64,6 +64,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { toast } from 'sonner';
 import { Toaster } from "@/components/ui/sonner";
+import { useRouter } from "next/navigation";
 
 export const Navbar = () => {
     const scrolled = useScrollTop();
@@ -85,20 +86,22 @@ export const Navbar = () => {
 
 // Inner component that has access to auth hooks
 function AuthContent() {
-    const { isSignedIn,  } = useAuth();
-    //const {docId} = await
+    const { isSignedIn } = useAuth();
+    const router = useRouter();
 
     useEffect(() => {
         if (isSignedIn) {
             toast.success("Logged in successfully!");
+            // Redirect to /doc after successful login
+            router.push("/doc");
         }
-    }, [isSignedIn]);
+    }, [isSignedIn, router]);
 
     return (
         <>
             <SignedOut>
-                <SignInButton mode="modal">
-                    <Button  size="sm">
+                <SignInButton mode="modal" redirectUrl="/doc">
+                    <Button size="sm">
                         Log in
                     </Button>
                 </SignInButton>
