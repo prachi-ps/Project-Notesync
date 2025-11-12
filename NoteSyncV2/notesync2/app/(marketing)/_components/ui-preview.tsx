@@ -1,7 +1,5 @@
 'use client';
 
-import Image from "next/image";
-
 export const UIPreview = () => {
     return (
         <div className="w-full max-w-7xl mx-auto mt-12 px-4">
@@ -11,14 +9,8 @@ export const UIPreview = () => {
                     <h1 className="text-xl font-semibold">John's Space</h1>
                     <div className="flex items-center gap-3">
                         <div className="text-sm text-muted-foreground">Home / doc / Project Plan</div>
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20">
-                            <Image 
-                                src="https://api.dicebear.com/7.x/avataaars/svg?seed=John"
-                                alt="User"
-                                width={32}
-                                height={32}
-                                className="rounded-full"
-                            />
+                        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center overflow-hidden border-2 border-white text-white text-xs font-semibold">
+                            J
                         </div>
                     </div>
                 </div>
@@ -79,32 +71,14 @@ export const UIPreview = () => {
                                 <div className="flex items-center gap-3">
                                     <p className="font-light text-xs text-muted-foreground">Users currently editing:</p>
                                     <div className="flex -space-x-3">
-                                        <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden">
-                                            <Image 
-                                                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah"
-                                                alt="Sarah"
-                                                width={32}
-                                                height={32}
-                                                className="rounded-full"
-                                            />
+                                        <div className="w-8 h-8 rounded-full border-2 border-white bg-green-500 flex items-center justify-center text-white text-xs font-semibold">
+                                            S
                                         </div>
-                                        <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden">
-                                            <Image 
-                                                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Mike"
-                                                alt="Mike"
-                                                width={32}
-                                                height={32}
-                                                className="rounded-full"
-                                            />
+                                        <div className="w-8 h-8 rounded-full border-2 border-white bg-purple-500 flex items-center justify-center text-white text-xs font-semibold">
+                                            M
                                         </div>
-                                        <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden">
-                                            <Image 
-                                                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Emma"
-                                                alt="Emma"
-                                                width={32}
-                                                height={32}
-                                                className="rounded-full"
-                                            />
+                                        <div className="w-8 h-8 rounded-full border-2 border-white bg-pink-500 flex items-center justify-center text-white text-xs font-semibold">
+                                            E
                                         </div>
                                     </div>
                                 </div>

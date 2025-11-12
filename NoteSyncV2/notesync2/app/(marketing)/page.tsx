@@ -1,5 +1,6 @@
 import { Footer } from "./_components/footer";
 import { Heading } from "./_components/heading";
+import { Heroes } from "./_components/heroes";
 import { UIPreview } from "./_components/ui-preview";
 import { TrustedBy } from "./_components/trusted-by";
 
@@ -16,6 +17,7 @@ const MarketingPage = () => {
             
             <div className="flex flex-col items-center justify-center text-center gap-y-12 flex-1 px-6 py-12 relative z-10">
                 <Heading />
+                <Heroes />
                 <UIPreview />
             </div>
             
