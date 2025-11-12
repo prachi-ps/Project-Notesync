@@ -23,7 +23,7 @@ interface RoomUser {
   id: string;
   userId: string;
   role: "owner" | "editor";
-  createdAt?: any;
+  createdAt?: string;
   roomId: string;
 }
 

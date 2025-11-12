@@ -277,11 +277,30 @@ export async function getUsersInRoom(roomId: string) {
 
     const users = membersSnapshot.docs.map((doc) => {
       const data = doc.data();
+      
+      // Convert Firestore Timestamp to plain object (ISO string)
+      let createdAt: string | undefined;
+      const timestamp = data.addedAt || data.createdAt;
+      if (timestamp) {
+        // Check if it's a Firestore Timestamp
+        if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+          createdAt = timestamp.toDate().toISOString();
+        } else if (timestamp instanceof Date) {
+          createdAt = timestamp.toISOString();
+        } else if (typeof timestamp === 'string') {
+          createdAt = timestamp;
+        } else if (timestamp._seconds) {
+          // Handle Firestore Timestamp object structure
+          const date = new Date(timestamp._seconds * 1000 + (timestamp._nanoseconds || 0) / 1000000);
+          createdAt = date.toISOString();
+        }
+      }
+      
       return {
         id: doc.id,
         userId: data.email || doc.id, // Use email from data or doc ID as fallback
         role: data.role || "editor",
-        createdAt: data.addedAt || data.createdAt,
+        createdAt: createdAt,
         roomId: roomId,
       };
     });

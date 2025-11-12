@@ -6,12 +6,24 @@ import { Facebook, Instagram, Twitter } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton } from "@clerk/clerk-react";
-import { UserAvatars } from "./user-avatars";
 
 export const Heading = () => {
     return(
         <div className="max-w-7xl w-full">
-            <UserAvatars />
+            {/* Video Background */}
+            <div className="w-full max-w-4xl mx-auto mb-0 rounded-lg overflow-hidden">
+                <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                    className="w-full h-auto rounded-lg shadow-lg"
+                >
+                    <source src="/homepage-hero-animation.mp4" type="video/mp4" />
+                    Your browser does not support the video tag.
+                </video>
+            </div>
             
             <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-12 mt-8">
                 {/* Left Side - Illustration with decorative elements */}
@@ -74,16 +86,16 @@ export const Heading = () => {
                 {/* Right Side - Content */}
                 <div className="flex-1 w-full lg:w-auto space-y-6 text-left">
                     <div className="space-y-4">
-                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight">
+                        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-black">
                             One workspace.
                             <span className="block mt-2">
-                                <span className="bg-orange-100 px-3 py-1 rounded-md">Zero busywork.</span>
+                                <span className="px-3 py-1 rounded-md">Zero busywork.</span>
                             </span>
                         </h1>
-                        <p className="text-base sm:text-lg text-muted-foreground">
+                        <p className="text-base sm:text-lg text-black">
                             A workspace based in New York, US.
                         </p>
-                        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-lg">
+                        <p className="text-sm sm:text-base text-black leading-relaxed max-w-lg">
                             NoteSync is where your teams capture knowledge, find answers, and automate projects. 
                             Solutions of design in modern era. Now a team of 7 feels like 70.
                         </p>
@@ -97,7 +109,7 @@ export const Heading = () => {
                             className="flex-1 bg-orange-50/50 border-orange-200 focus:border-orange-400"
                         />
                         <SignedOut>
-                            <SignInButton mode="modal" redirectUrl="/doc">
+                            <SignInButton mode="modal" fallbackRedirectUrl="/doc">
                                 <Button className="bg-gray-800 hover:bg-gray-900 text-white px-6 py-6 rounded-md">
                                     SUBSCRIBE
                                 </Button>
