@@ -75,7 +75,7 @@ const MarketingPage = () => {
                                 features that grow with your team.
                             </p>
                             <p className="text-black leading-relaxed">
-                                From startups in New York to global enterprises, thousands of teams trust NoteSync to power their 
+                                From startups in Kothrud, Pune to global enterprises, thousands of teams trust NoteSync to power their 
                                 daily work. Join us in redefining how teams collaborate and create together.
                             </p>
                         </div>
@@ -110,9 +110,9 @@ const MarketingPage = () => {
                             <div>
                                 <h3 className="text-xl font-semibold text-black mb-2">Office</h3>
                                 <p className="text-black">
-                                    123 Innovation Street<br />
-                                    New York, NY 10001<br />
-                                    United States
+                                    7 Skyview Terrace<br />
+                                    Aetheria, Cloudlands 98765<br />
+                                    Republic of Imagination
                                 </p>
                             </div>
                             <div>
