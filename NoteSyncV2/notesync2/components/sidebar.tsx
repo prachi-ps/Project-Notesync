@@ -122,7 +122,7 @@ function Sidebar() {
     <>
       <NewDocumentButton />
 
-      <div className="flex py-4 flex-col space-y-4 md:max-w-36">
+      <div className="flex py-4 flex-col space-y-4 md:max-w-36 md:flex-1">
   {/* My Documents */}
   {groupedData.owner.length === 0 ? (
     <h2 className="text-gray-500 font-semibold text-sm">
@@ -167,13 +167,13 @@ function Sidebar() {
   );
 
   return (
-    <div className="p-2 md:p-5 bg-gray-200 relative">
+    <aside className="p-2 md:p-5 bg-gray-200 relative h-full md:h-screen md:max-h-screen md:w-72 md:flex md:flex-col">
       <div className="md:hidden">
       <Sheet>
         <SheetTrigger>
           <MenuIcon className="p-2 hover:opacity-30 rounded-lg" size={40}/>
         </SheetTrigger>
-        <SheetContent side="left" className="flex flex-col items-center space-y-6 pt-6">
+        <SheetContent side="left" className="flex flex-col items-center space-y-6 pt-6 overflow-y-auto">
           <SheetHeader className="text-center">
             <SheetTitle className="text-xl font-bold">Menu</SheetTitle>
             <div className="flex flex-col items-center space-y-3">
@@ -185,8 +185,10 @@ function Sidebar() {
       </Sheet>
       </div>
 
-      <div className="hidden md:inline">{menuOptions}</div>
-    </div>
+      <div className="hidden md:flex md:flex-1 md:flex-col md:space-y-6 md:overflow-y-auto md:pr-2">
+        {menuOptions}
+      </div>
+    </aside>
   )
 }
 

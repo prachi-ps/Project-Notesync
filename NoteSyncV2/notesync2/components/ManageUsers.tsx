@@ -1,23 +1,22 @@
 'use client';
-import React, { FormEvent, useState, useTransition, useEffect } from 'react'
+import React, { useMemo, useState, useTransition } from 'react'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from './ui/button';
-import { usePathname, useRouter } from 'next/navigation';  
-import { inviteUserToDocument, removeUserFromDocument, getUsersInRoom } from '@/actions/actions';
-import { Input } from './ui/input';
+import { removeUserFromDocument } from '@/actions/actions';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
 import useOwner from '@/lib/useOwner';
 import { useRoom } from '@liveblocks/react/suspense';
+import { useCollection } from 'react-firebase-hooks/firestore';
+import { collection } from 'firebase/firestore';
+import { db } from '@/firebase';
 
 interface RoomUser {
   id: string;
@@ -33,45 +32,70 @@ function ManageUsers() {
     const isOwner = useOwner();
     const [ isOpen , setIsOpen ] = useState(false);
     const [ isPending, startTransition ] = useTransition();
-    const [usersInRoom, setUsersInRoom] = useState<RoomUser[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<Error | null>(null);
+    const roomId = room?.id;
 
-    // Fetch users when dialog opens or room changes
-    useEffect(() => {
-      if (room?.id && isOpen) {
-        setLoading(true);
-        setError(null);
-        getUsersInRoom(room.id)
-          .then((result) => {
-            if (result.success) {
-              setUsersInRoom(result.users);
-            } else {
-              setError(new Error('Failed to load users'));
-            }
-          })
-          .catch((err) => {
-            console.error('Error loading users in room:', err);
-            setError(err);
-          })
-          .finally(() => {
-            setLoading(false);
-          });
+    const [membersSnapshot, membersLoading, membersError] = useCollection(
+      roomId ? collection(db, "documents", roomId, "members") : null,
+      {
+        snapshotListenOptions: { includeMetadataChanges: false },
       }
-    }, [room?.id, isOpen]);
+    );
+
+    const usersInRoom = useMemo<RoomUser[]>(() => {
+      if (!membersSnapshot) {
+        return [];
+      }
+
+      return membersSnapshot.docs
+        .map((docSnapshot) => {
+          const data = docSnapshot.data() as {
+            email?: string;
+            role?: "owner" | "editor";
+            addedAt?: any;
+          };
+
+          let createdAt: string | undefined;
+          const timestamp = data?.addedAt;
+
+          if (timestamp) {
+            if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+              createdAt = timestamp.toDate().toISOString();
+            } else if (timestamp instanceof Date) {
+              createdAt = timestamp.toISOString();
+            } else if (typeof timestamp === 'string') {
+              createdAt = timestamp;
+            } else if (timestamp._seconds) {
+              const date = new Date(
+                timestamp._seconds * 1000 +
+                  (timestamp._nanoseconds || 0) / 1000000
+              );
+              createdAt = date.toISOString();
+            }
+          }
+
+          return {
+            id: docSnapshot.id,
+            userId: data?.email || docSnapshot.id,
+            role: data?.role === "owner" ? "owner" : "editor",
+            createdAt,
+            roomId: roomId!,
+          };
+        })
+        .sort((a, b) => {
+          if (!a.createdAt || !b.createdAt) {
+            return 0;
+          }
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+    }, [membersSnapshot, roomId]);
 
     const handleDelete = (userId: string) => {
         startTransition(async () => {
-            if(!user) return;
+            if(!user || !roomId) return;
 
-            const result = await removeUserFromDocument(room.id, userId);
+            const result = await removeUserFromDocument(roomId, userId);
             if(result?.success){
                 toast.success("User removed from room successfully!");
-                // Refresh the users list
-                const refreshResult = await getUsersInRoom(room.id);
-                if (refreshResult.success) {
-                  setUsersInRoom(refreshResult.users);
-                }
             } else{
                 toast.error("Failed to remove user from room.")
             }
@@ -94,13 +118,13 @@ function ManageUsers() {
 
         {/*below div that maps through users in the room*/}
         <div className='flex flex-col space-y-2'>
-            {loading && <p className='text-sm text-gray-500'>Loading users...</p>}
-            {error && (
+            {membersLoading && <p className='text-sm text-gray-500'>Loading users...</p>}
+            {membersError && (
               <p className='text-sm text-red-500'>
                 Error loading users. Please try again.
               </p>
             )}
-            {!loading && !error && usersInRoom.length === 0 && (
+            {!membersLoading && !membersError && usersInRoom.length === 0 && (
               <p className='text-sm text-gray-500'>No users found in this room.</p>
             )}
             {/* UsersInRoom */}
