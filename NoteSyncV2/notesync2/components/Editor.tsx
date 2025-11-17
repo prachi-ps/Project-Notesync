@@ -12,6 +12,8 @@ import "@blocknote/shadcn/style.css";
 import stringToColor from "@/lib/stringToColor";
 import { db } from "@/firebase"; // ✅ ensure this points to your Firebase config
 import { doc as firestoreDoc, setDoc, getDoc } from "firebase/firestore";
+import TranslateDocument from "./TranslateDocument";
+import ChatToDocument from "./ChatToDocument";
 
 type EditorProps = {
   doc: Y.Doc;
@@ -22,6 +24,7 @@ type EditorProps = {
 };
 
 // Debounced save: waits until user stops typing for 2 seconds
+// Save to shared document location so all users (owner and editors) persist to the same place
 function useAutoSaveEditor(roomId: string, userId: string, editor: BlockNoteEditor | null) {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -29,13 +32,26 @@ function useAutoSaveEditor(roomId: string, userId: string, editor: BlockNoteEdit
     if (!editor || !roomId || !userId) return;
 
     const saveContent = async () => {
-      const blocks = editor.document;
-      await setDoc(
-        firestoreDoc(db, "users", userId, "rooms", roomId),
-        { content: blocks, updatedAt: new Date() },
-        { merge: true }
-      );
-      console.log("✅ Content saved to Firestore");
+      if (!roomId || !userId) return;
+      
+      try {
+        const blocks = editor.document;
+        // Save to shared document location - all users save to the same place
+        // This ensures edits persist for everyone, regardless of who made them
+        await setDoc(
+          firestoreDoc(db, "documents", roomId),
+          { 
+            content: blocks, 
+            updatedAt: new Date(),
+            lastUpdatedBy: userId // Track who made the last edit
+          },
+          { merge: true }
+        );
+        console.log("✅ Content saved to Firestore (shared location)");
+      } catch (error) {
+        console.error('Error saving content to Firestore:', error);
+        // Don't throw - allow user to continue editing
+      }
     };
 
     const handleChange = () => {
@@ -54,20 +70,44 @@ function useAutoSaveEditor(roomId: string, userId: string, editor: BlockNoteEdit
 }
 
 // Load previously saved content from Firestore
+// Load from shared document location so all users see the same content
+// This is a fallback for when Liveblocks hasn't synced yet or on initial load
 function useLoadEditorContent(roomId: string, userId: string, editor: BlockNoteEditor | null) {
+  const hasLoadedRef = useRef(false);
+
   useEffect(() => {
     const loadContent = async () => {
-      if (!editor || !roomId || !userId) return;
+      if (!editor || !roomId || !userId || hasLoadedRef.current) return;
 
-      const snap = await getDoc(firestoreDoc(db, "users", userId, "rooms", roomId));
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.content) {
-          editor.replaceBlocks(editor.document, data.content);
+      try {
+        // Load from shared document location - all users load from the same place
+        const snap = await getDoc(firestoreDoc(db, "documents", roomId));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.content && Array.isArray(data.content) && data.content.length > 0) {
+            // Only load if editor is empty (just initialized) to avoid overwriting real-time collaboration
+            // Liveblocks handles real-time sync, this is just for initial load when no one else is online
+            const isEmpty = editor.document.length === 0 || 
+                           (editor.document.length === 1 && 
+                            editor.document[0].type === "paragraph" && 
+                            (!editor.document[0].content || editor.document[0].content.length === 0));
+            
+            if (isEmpty) {
+              editor.replaceBlocks(editor.document, data.content);
+              hasLoadedRef.current = true;
+              console.log("✅ Content loaded from Firestore (shared location)");
+            }
+          }
         }
+      } catch (error) {
+        console.error('Error loading content from Firestore:', error);
+        // Don't throw - allow editor to work with empty content
       }
     };
-    loadContent();
+    
+    // Small delay to let Liveblocks initialize first
+    const timeout = setTimeout(loadContent, 500);
+    return () => clearTimeout(timeout);
   }, [editor, roomId, userId]);
 }
 
@@ -133,7 +173,10 @@ function Editor() {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center gap-2 max-w-4xl justify-end mb-10">
+        <ChatToDocument doc = {doc} />
+          <TranslateDocument doc = {doc} />
         <Button className={style} onClick={() => setDarkMode(!darkMode)}>
+          {/* Toggle dark mode */}
           {darkMode ? <SunIcon /> : <MoonIcon />}
         </Button>
       </div>

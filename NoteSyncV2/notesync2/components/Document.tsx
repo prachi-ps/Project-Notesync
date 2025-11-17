@@ -3,7 +3,7 @@
 
 "use client";
 
-import React, { FormEvent, useEffect, useState, useTransition } from 'react'
+import React, { FormEvent, useEffect, useRef, useState, useTransition } from 'react'
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -15,18 +15,57 @@ import DeleteDocument from './DeleteDocument';
 import InviteUser from './InviteUser';
 import ManageUsers from './ManageUsers';
 import Avatars from './Avatars';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 function Document({id}: {id: string}) {
-    const [data, loading, error] = useDocumentData(doc(db, "documents", id))
+    const router = useRouter();
+    const { user } = useUser();
+    const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+    const [data, loading, error] = useDocumentData(
+      id ? doc(db, "documents", id) : null,
+      {
+        snapshotListenOptions: { includeMetadataChanges: false },
+      }
+    );
+    const [membership, membershipLoading] = useDocumentData(
+      userEmail && id ? doc(db, "users", userEmail, "rooms", id) : null,
+      {
+        snapshotListenOptions: { includeMetadataChanges: false },
+      }
+    );
     const[input, setInput] = useState("");
     const [isUpdating, startTransition] = useTransition();
     const isOwner = useOwner();
+    const hasHandledAccessRevocation = useRef(false);
+
+    // Handle errors gracefully
+    if (error) {
+      console.error('Error loading document:', error);
+    }
 
     useEffect(() => {
         if(data){
             setInput(data.title);
         }
     }, [data])
+
+    useEffect(() => {
+        if (
+            hasHandledAccessRevocation.current ||
+            membershipLoading ||
+            !userEmail
+        ) {
+            return;
+        }
+
+        if (!membership) {
+            hasHandledAccessRevocation.current = true;
+            toast.error("Your access to this document has been revoked.");
+            router.replace("/");
+        }
+    }, [membership, membershipLoading, router, userEmail]);
 
     const updateTitle = (e: FormEvent) => {
         e.preventDefault();

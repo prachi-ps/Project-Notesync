@@ -1,45 +1,99 @@
 'use client';
-import React, { FormEvent, useState, useTransition } from 'react'
+import React, { useMemo, useState, useTransition } from 'react'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from './ui/button';
-import { usePathname, useRouter } from 'next/navigation';  
-import { inviteUserToDocument, removeUserFromDocument } from '@/actions/actions';
-import { Input } from './ui/input';
+import { removeUserFromDocument } from '@/actions/actions';
 import { toast } from 'sonner';
 import { useUser } from '@clerk/nextjs';
 import useOwner from '@/lib/useOwner';
 import { useRoom } from '@liveblocks/react/suspense';
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collectionGroup, query, where } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { db } from '@/firebase';
 
+interface RoomUser {
+  id: string;
+  userId: string;
+  role: "owner" | "editor";
+  createdAt?: string;
+  roomId: string;
+}
 
 function ManageUsers() {
     const { user } = useUser();
     const room = useRoom()
     const isOwner = useOwner();
     const [ isOpen , setIsOpen ] = useState(false);
-    const [ isPending, startTransition ] = useTransition();   
+    const [ isPending, startTransition ] = useTransition();
+    const roomId = room?.id;
 
-    const [usersInRoom] = useCollection(
-        user && query (collectionGroup(db, "rooms"), where("roomId", "==", room.id))
+    const [membersSnapshot, membersLoading, membersError] = useCollection(
+      roomId ? collection(db, "documents", roomId, "members") : null,
+      {
+        snapshotListenOptions: { includeMetadataChanges: false },
+      }
     );
+
+    const usersInRoom = useMemo<RoomUser[]>(() => {
+      if (!membersSnapshot) {
+        return [];
+      }
+
+      return membersSnapshot.docs
+        .map((docSnapshot) => {
+          const data = docSnapshot.data() as {
+            email?: string;
+            role?: "owner" | "editor";
+            addedAt?: any;
+          };
+
+          let createdAt: string | undefined;
+          const timestamp = data?.addedAt;
+
+          if (timestamp) {
+            if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+              createdAt = timestamp.toDate().toISOString();
+            } else if (timestamp instanceof Date) {
+              createdAt = timestamp.toISOString();
+            } else if (typeof timestamp === 'string') {
+              createdAt = timestamp;
+            } else if (timestamp._seconds) {
+              const date = new Date(
+                timestamp._seconds * 1000 +
+                  (timestamp._nanoseconds || 0) / 1000000
+              );
+              createdAt = date.toISOString();
+            }
+          }
+
+          return {
+            id: docSnapshot.id,
+            userId: data?.email || docSnapshot.id,
+            role: data?.role === "owner" ? "owner" : "editor",
+            createdAt,
+            roomId: roomId!,
+          };
+        })
+        .sort((a, b) => {
+          if (!a.createdAt || !b.createdAt) {
+            return 0;
+          }
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+    }, [membersSnapshot, roomId]);
 
     const handleDelete = (userId: string) => {
         startTransition(async () => {
-            if(!user) return;
+            if(!user || !roomId) return;
 
-            const result = await removeUserFromDocument(room.id, userId);
-            //console.log("API Response: ", result);
+            const result = await removeUserFromDocument(roomId, userId);
             if(result?.success){
                 toast.success("User removed from room successfully!");
             } else{
@@ -51,7 +105,7 @@ function ManageUsers() {
   return (
     <Dialog open = {isOpen} onOpenChange={setIsOpen}>
     <Button asChild variant="outline">
-        <DialogTrigger>Users ({usersInRoom?.docs.length})</DialogTrigger> 
+        <DialogTrigger>Users ({usersInRoom.length})</DialogTrigger> 
     </Button>
     <DialogContent>
         <DialogHeader>
@@ -64,25 +118,34 @@ function ManageUsers() {
 
         {/*below div that maps through users in the room*/}
         <div className='flex flex-col space-y-2'>
+            {membersLoading && <p className='text-sm text-gray-500'>Loading users...</p>}
+            {membersError && (
+              <p className='text-sm text-red-500'>
+                Error loading users. Please try again.
+              </p>
+            )}
+            {!membersLoading && !membersError && usersInRoom.length === 0 && (
+              <p className='text-sm text-gray-500'>No users found in this room.</p>
+            )}
             {/* UsersInRoom */}
-            {usersInRoom?.docs.map((doc) => (
-                <div key={doc.data().userId}
+            {usersInRoom.map((roomUser) => (
+                <div key={roomUser.userId}
                 className='flex items-center justify-between gap-2'>
                     <p className='font-light'>
                         {/* display all users who have access to document */}
-                        {doc.data().userId === user?.emailAddresses[0].toString() 
-                        ? `You (${doc.data().userId})`
-                        : doc.data().userId}
+                        {roomUser.userId === user?.emailAddresses[0]?.emailAddress 
+                        ? `You (${roomUser.userId})`
+                        : roomUser.userId}
                     </p>
 
                     <div className='flex items-center gap-2 '>
-                        <Button variant="outline">{doc.data().role}</Button>
+                        <Button variant="outline">{roomUser.role}</Button>
 
                         {isOwner &&
-                            doc.data().userId !== user?.emailAddresses[0].toString() && (
+                            roomUser.userId !== user?.emailAddresses[0]?.emailAddress && (
                                 <Button
                                     variant="destructive"
-                                    onClick={() => handleDelete(doc.data().userId)}
+                                    onClick={() => handleDelete(roomUser.userId)}
                                     disabled={isPending}
                                     size="sm"
                                 >
