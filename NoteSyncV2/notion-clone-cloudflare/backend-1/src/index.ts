@@ -21,6 +21,11 @@ app.use(
 	})
 );
 
+// Health / root route to avoid 404 during local development
+app.get('/', (c) => {
+    return c.json({ status: 'ok', message: 'Worker is running' });
+});
+
 app.post('/chatToDocument', async (c) => {
 	try {
 		const { documentData, question } = await c.req.json();
